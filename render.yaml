@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: sentinel-waf-server
+    env: node
+    rootDir: server
+    buildCommand: export DATABASE_URL="file:./dev.db" && npm install && npx prisma db push && npm run build
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        value: file:./dev.db
+      - key: NODE_ENV
+        value: production
+      - key: WAF_MODE
+        value: PREVENTION

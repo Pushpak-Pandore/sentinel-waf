@@ -3,7 +3,7 @@ const API_BASE = import.meta.env.VITE_API_URL
   : '/api/v1';
 
 export async function apiFetch<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('sentinel_token');
+  const token = sessionStorage.getItem('sentinel_token') || localStorage.getItem('sentinel_token');
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -25,6 +25,7 @@ export async function apiFetch<T = any>(endpoint: string, options: RequestInit =
   }
 
   if (response.status === 401) {
+    sessionStorage.removeItem('sentinel_token');
     localStorage.removeItem('sentinel_token');
     if (window.location.pathname !== '/login' && !endpoint.includes('/auth/login')) {
       window.location.href = '/login';
@@ -121,7 +122,7 @@ export const api = {
   getGeoThreats: (period = '24h') => apiFetch(`/analytics/geo-threats?period=${period}`),
   getMlShadowAnalytics: (period = '24h') => apiFetch(`/analytics/ml-shadow?period=${period}`),
   downloadPdfReport: async (period = '24h') => {
-    const token = localStorage.getItem('sentinel_token');
+    const token = sessionStorage.getItem('sentinel_token') || localStorage.getItem('sentinel_token');
     const res = await fetch(`${API_BASE}/analytics/report/pdf?period=${period}`, {
       headers: {
         Authorization: `Bearer ${token}`,

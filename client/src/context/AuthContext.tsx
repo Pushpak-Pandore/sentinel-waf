@@ -15,42 +15,26 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [wafMode, setWafModeState] = useState<string>('PREVENTION');
 
+  // Enforce zero session persistence across browser reloads / direct URL entries:
+  // Every page refresh or direct URL entry clears tokens and forces user back to login.
   useEffect(() => {
-    const token = localStorage.getItem('sentinel_token');
-    if (token) {
-      api.getMe()
-        .then((res) => {
-          setUser(res.user);
-          // Fetch initial WAF mode once authenticated
-          api.getSettings()
-            .then((settingsRes) => {
-              if (settingsRes.settings && settingsRes.settings.WAF_MODE) {
-                setWafModeState(settingsRes.settings.WAF_MODE);
-              }
-            })
-            .catch(() => {});
-        })
-        .catch(() => {
-          localStorage.removeItem('sentinel_token');
-          setUser(null);
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    localStorage.removeItem('sentinel_token');
+    sessionStorage.removeItem('sentinel_token');
+    setUser(null);
   }, []);
 
   const login = (token: string, userData: User) => {
-    localStorage.setItem('sentinel_token', token);
+    sessionStorage.setItem('sentinel_token', token);
     setUser(userData);
   };
 
   const logout = () => {
     api.logout().catch(() => {});
     localStorage.removeItem('sentinel_token');
+    sessionStorage.removeItem('sentinel_token');
     setUser(null);
   };
 

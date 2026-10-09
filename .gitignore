@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Production & Build outputs
+dist/
+client/dist/
+server/dist/
+build/
+
+# Database & SQLite files
+server/prisma/dev.db
+server/prisma/dev.db-journal
+*.db
+*.sqlite
+
+# Certificates & Local TLS certs
+server/certs/*.crt
+server/certs/*.key
+
+# Environment variables
+.env
+server/.env
+client/.env
+*.env.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

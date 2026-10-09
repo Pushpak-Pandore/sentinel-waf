@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  role         String     @default("ADMIN") // ADMIN, ANALYST
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  auditLogs    AuditLog[]
+}
+
+model ProtectedApp {
+  id           String          @id @default(uuid())
+  appId        String          @unique // e.g., "app-web-store", "app-api-gateway"
+  name         String
+  host         String          // e.g., "localhost", "store.internal"
+  upstreamUrl  String          // e.g., "http://localhost:5001"
+  enabled      Boolean         @default(true)
+  wafMode      String          @default("INHERIT") // INHERIT, PREVENTION, DETECTION, DISABLED
+  requestLimit Int             @default(100) // max requests per minute window
+  healthStatus String          @default("HEALTHY") // HEALTHY, DEGRADED, UNREACHABLE
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  events       SecurityEvent[]
+  trafficLogs  TrafficLog[]
+}
+
+model WafRule {
+  id          String   @id @default(uuid())
+  ruleId      String   @unique // e.g., "R-SQLI-001", "CRS-942-100"
+  name        String
+  description String
+  category    String   // SQLI, XSS, CSRF, DOS, LFI, REMOTE_ACCESS, MALFORMED, BOT, CRS_PROTOCOL
+  severity    String   // CRITICAL, HIGH, MEDIUM, LOW
+  enabled     Boolean  @default(true)
+  action      String   // BLOCK, LOG, ALLOW
+  matchType   String   // REGEX, CONTAINS, EXACT, HEADER_PRESENT
+  targetField String   // QUERY, BODY, PATH, HEADER, METHOD, FULL_URL
+  pattern     String   // Pattern or regular expression string
+  isCrsRule   Boolean  @default(false)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model WafException {
+  id          String    @id @default(uuid())
+  appId       String    @default("*")
+  pathPattern String    @default("*")
+  method      String    @default("*")
+  ruleId      String    // Rule ID to bypass
+  justification String
+  expiresAt   DateTime?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model VirtualPatch {
+  id          String    @id @default(uuid())
+  patchId     String    @unique // e.g., "PATCH-2026-001"
+  name        String
+  appId       String    @default("*")
+  pathPattern String
+  method      String    @default("*")
+  targetField String    @default("FULL_URL")
+  pattern     String
+  action      String    @default("BLOCK") // BLOCK, LOG
+  enabled     Boolean   @default(true)
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model SiemWebhook {
+  id             String   @id @default(uuid())
+  name           String
+  url            String
+  secret         String?
+  enabled        Boolean  @default(true)
+  contentType    String   @default("application/json")
+  minSeverity    String   @default("MEDIUM")
+  successCount   Int      @default(0)
+  failureCount   Int      @default(0)
+  lastDeliveryAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model PolicyVersion {
+  id                String   @id @default(uuid())
+  version           Int      @unique
+  description       String
+  configJson        String   // Stringified JSON snapshot of settings & rules
+  createdBy         String?
+  rollbackAvailable Boolean  @default(true)
+  createdAt         DateTime @default(now())
+}
+
+model IpAccessRule {
+  id          String    @id @default(uuid())
+  ipOrCidr    String    @unique // e.g., "192.168.1.100", "10.0.0.0/8", "2001:db8::/32"
+  ipVersion   String    // IPv4, IPv6
+  type        String    // ALLOW, BLOCK
+  description String?
+  reason      String?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model RateLimitPolicy {
+  id          String   @id @default(uuid())
+  name        String
+  scope       String   // GLOBAL, IP, APP, ROUTE
+  pathPattern String   @default("*")
+  windowMs    Int      @default(60000) // 1 minute window
+  maxRequests Int      @default(100)
+  burstLimit  Int      @default(20)
+  action      String   @default("RATE_LIMIT") // RATE_LIMIT, BLOCK
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SecurityEvent {
+  id               String        @id @default(uuid())
+  correlationId   String
+  clientIp         String
+  ipVersion        String        // IPv4, IPv6
+  method           String
+  path             String
+  appId            String?
+  protectedApp     ProtectedApp? @relation(fields: [appId], references: [id], onDelete: SetNull)
+  status           Int           @default(200)
+  matchedRuleId    String?
+  category         String        // SQLI, XSS, CSRF, DOS, LFI, REMOTE_ACCESS, MALFORMED, BOT, IP_BLOCK, RATE_LIMIT, VIRTUAL_PATCH
+  severity         String        // CRITICAL, HIGH, MEDIUM, LOW, INFO
+  decision         String        // BLOCK, LOG, ALLOW, RATE_LIMIT
+  explanation      String
+  anomalyScore     Int           @default(0)
+  inboundThreshold Int           @default(5)
+  candidateDecision String?      // Shadow mode decision: e.g. "PROJECTED_BLOCK"
+  durationMs       Float         @default(0)
+  requestHeaders   String?       // JSON stringified sanitized headers
+  queryParams      String?       // JSON stringified sanitized query
+  requestBody      String?       // JSON stringified sanitized body snippet
+  userAgent        String?
+  countryCode      String?
+  countryName      String?
+  mlAnomalyScore   Float?
+  mlPrediction     String?
+  mlFeatureMeta    String?
+  timestamp        DateTime      @default(now())
+}
+
+model TrafficLog {
+  id             String        @id @default(uuid())
+  correlationId String
+  clientIp       String
+  method         String
+  path           String
+  statusCode     Int
+  durationMs     Float
+  decision       String        // ALLOW, LOG, BLOCK, RATE_LIMIT
+  countryCode    String?
+  countryName    String?
+  appId          String?
+  protectedApp   ProtectedApp? @relation(fields: [appId], references: [id], onDelete: SetNull)
+  timestamp      DateTime      @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userEmail String?
+  action    String   // e.g., "RULE_CREATE", "MODE_CHANGE", "IP_BLOCK_ADD", "VIRTUAL_PATCH_CREATE"
+  entity    String   // e.g., "WafRule", "VirtualPatch", "WafException"
+  entityId  String?
+  details   String?  // JSON context
+  ipAddress String?
+  timestamp DateTime @default(now())
+}
+
+model SystemSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique // e.g., "WAF_MODE", "ANOMALY_THRESHOLD", "SHADOW_MODE"
+  value       String   // Stringified value
+  description String?
+  updatedAt   DateTime @updatedAt
+}

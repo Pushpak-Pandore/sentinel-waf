@@ -20,27 +20,35 @@ const HOP_BY_HOP_HEADERS = new Set([
 /**
  * Validates upstream URL for SSRF protection
  */
-export function validateUpstreamUrl(targetUrl: string, allowedHosts: string[] = ['localhost', '127.0.0.1']): boolean {
+export function validateUpstreamUrl(targetUrl: string, allowedHosts: string[] = ['*']): boolean {
   try {
     const parsed = new URL(targetUrl);
     const host = parsed.hostname.toLowerCase();
 
-    // Block cloud metadata services
-    if (host === '169.254.169.254' || host === 'metadata.google.internal') {
+    // Block cloud metadata services and dangerous internal SSRF vectors
+    if (
+      host === '169.254.169.254' ||
+      host === 'metadata.google.internal' ||
+      host.endsWith('.metadata.google.internal')
+    ) {
       return false;
     }
 
-    // Check if host is permitted
-    if (allowedHosts.includes('*')) return true;
+    // Require valid http: or https: scheme
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return false;
+    }
 
-    const normHost = normalizeIp(host).ip;
-    return (
-      allowedHosts.includes(host) ||
-      allowedHosts.includes(normHost) ||
-      host === 'localhost' ||
-      host.endsWith('.internal') ||
-      host === '127.0.0.1'
-    );
+    // Check optional environment host restriction if explicitly configured
+    const envAllowed = process.env.ALLOWED_UPSTREAM_HOSTS
+      ? process.env.ALLOWED_UPSTREAM_HOSTS.split(',').map((h) => h.trim().toLowerCase())
+      : null;
+
+    if (envAllowed && envAllowed.length > 0 && !envAllowed.includes('*')) {
+      return envAllowed.includes(host) || host === 'localhost' || host === '127.0.0.1';
+    }
+
+    return true;
   } catch {
     return false;
   }

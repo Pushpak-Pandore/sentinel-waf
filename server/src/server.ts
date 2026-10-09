@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
 import { config } from './config/env';
 import { checkDbConnection } from './db/prisma';
@@ -124,6 +125,18 @@ app.all(['/proxy/*', '/proxy'], async (req: Request, res: Response, next: NextFu
     });
   }
 });
+
+// Serve static React client build if present
+const clientDistPath = path.resolve(__dirname, '../../client/dist');
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/proxy') || req.path.startsWith('/health')) {
+      return next();
+    }
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 // Default 404 Handler for unknown routes
 app.use((req: Request, res: Response) => {

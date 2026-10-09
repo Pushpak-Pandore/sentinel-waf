@@ -1,4 +1,6 @@
-const API_BASE = '/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api/v1`
+  : '/api/v1';
 
 export async function apiFetch<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('sentinel_token');
@@ -12,10 +14,15 @@ export async function apiFetch<T = any>(endpoint: string, options: RequestInit =
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (netErr: any) {
+    throw new Error(`Network Error: Cannot connect to WAF Backend API. ${netErr.message}`);
+  }
 
   if (response.status === 401) {
     localStorage.removeItem('sentinel_token');
@@ -25,7 +32,18 @@ export async function apiFetch<T = any>(endpoint: string, options: RequestInit =
     throw new Error('Unauthorized');
   }
 
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  let data: any = {};
+
+  if (contentType.includes('application/json')) {
+    data = await response.json();
+  } else {
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`Backend Error (${response.status}): ${text.substring(0, 100) || 'Non-JSON response returned from server'}`);
+    }
+    data = { message: text };
+  }
 
   if (!response.ok) {
     throw new Error(data.message || data.error || 'API Request failed');

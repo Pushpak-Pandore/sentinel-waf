@@ -43,7 +43,6 @@ function generateDevCertificate(): { cert: string; key: string } {
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
   });
 
-  // Basic PEM-formatted certificate wrapper for development fallback
   const certHeader = '-----BEGIN CERTIFICATE-----\n';
   const certFooter = '\n-----END CERTIFICATE-----\n';
   const rawCert = Buffer.from(publicKey).toString('base64');
@@ -63,7 +62,8 @@ function generateDevCertificate(): { cert: string; key: string } {
  * Loads and validates TLS configuration securely without leaking secrets
  */
 export function loadTlsConfig(): TlsConfigResult {
-  const httpsEnabled = process.env.HTTPS_ENABLED === 'true' || process.env.NODE_ENV === 'production';
+  // HTTPS listener is enabled explicitly via environment variable
+  const httpsEnabled = process.env.HTTPS_ENABLED === 'true';
   const certPath = process.env.SSL_CERT_PATH || path.join(CERTS_DIR, 'dev-sentinel.crt');
   const keyPath = process.env.SSL_KEY_PATH || path.join(CERTS_DIR, 'dev-sentinel.key');
 
@@ -117,28 +117,33 @@ export function setupHttpsServer(app: Express, port: number = 5443): { server: h
     return { server: null, info: tlsInfo };
   }
 
-  const options: https.ServerOptions = {
-    cert: tlsInfo.cert,
-    key: tlsInfo.key,
-    minVersion: 'TLSv1.2',
-    ciphers: [
-      'ECDHE-ECDSA-AES128-GCM-SHA256',
-      'ECDHE-RSA-AES128-GCM-SHA256',
-      'ECDHE-ECDSA-AES256-GCM-SHA384',
-      'ECDHE-RSA-AES256-GCM-SHA384',
-      'DHE-RSA-AES128-GCM-SHA256',
-      'DHE-RSA-AES256-GCM-SHA384',
-    ].join(':'),
-    honorCipherOrder: true,
-  };
+  try {
+    const options: https.ServerOptions = {
+      cert: tlsInfo.cert,
+      key: tlsInfo.key,
+      minVersion: 'TLSv1.2',
+      ciphers: [
+        'ECDHE-ECDSA-AES128-GCM-SHA256',
+        'ECDHE-RSA-AES128-GCM-SHA256',
+        'ECDHE-ECDSA-AES256-GCM-SHA384',
+        'ECDHE-RSA-AES256-GCM-SHA384',
+        'DHE-RSA-AES128-GCM-SHA256',
+        'DHE-RSA-AES256-GCM-SHA384',
+      ].join(':'),
+      honorCipherOrder: true,
+    };
 
-  const server = https.createServer(options, app);
-  server.listen(port, () => {
-    console.log(`[HTTPS TLS Proxy] HTTPS Perimeter Server active on port ${port} (TLSv1.2+)`);
-    if (tlsInfo.isSelfSigned) {
-      console.log(`[HTTPS TLS Proxy] Using auto-generated development certificate.`);
-    }
-  });
+    const server = https.createServer(options, app);
+    server.listen(port, () => {
+      console.log(`[HTTPS TLS Proxy] HTTPS Perimeter Server active on port ${port} (TLSv1.2+)`);
+      if (tlsInfo.isSelfSigned) {
+        console.log(`[HTTPS TLS Proxy] Using auto-generated development certificate.`);
+      }
+    });
 
-  return { server, info: tlsInfo };
+    return { server, info: tlsInfo };
+  } catch (err: any) {
+    console.warn(`[HTTPS TLS Warning] Failed to bind secondary HTTPS listener (${err.message}). Primary HTTP server remains active.`);
+    return { server: null, info: { enabled: false, error: err.message } };
+  }
 }

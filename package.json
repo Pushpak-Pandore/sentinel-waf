@@ -4,11 +4,16 @@
   "private": true,
   "description": "Sentinel WAF - Advanced Web Application Firewall and Threat Monitoring Platform",
   "scripts": {
-    "setup": "npm install && cd server && npm install && npx prisma migrate dev --name init && npm run seed && cd ../client && npm install",
+    "setup": "npm install && cd server && npm install && npx prisma db push && npm run seed && cd ../client && npm install",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
     "dev:upstream": "cd server && npm run dev:upstream",
-    "build": "cd server && npm run build && cd ../client && npm run build",
+    "build": "cd server && npm install && npx prisma db push && npm run build",
+    "start": "cd server && npm start",
     "test": "cd server && npm test"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "prisma": "^5.22.0"
   }
 }
